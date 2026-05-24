@@ -77,9 +77,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     /**
      * Politica de acceso por endpoint:
-     *  - POST /validate         -> ORGANIZER o ADMIN (logistica de puerta)
-     *  - POST /sync             -> ORGANIZER o ADMIN (sincronizacion offline)
-     *  - GET /validations/**    -> ORGANIZER o ADMIN
+     *  - POST /validate         -> ORGANIZER, ADMIN o LOGISTICA (logistica de puerta)
+     *  - POST /sync             -> ORGANIZER, ADMIN o LOGISTICA (sincronizacion offline)
+     *  - GET /validations/**    -> ORGANIZER, ADMIN o LOGISTICA
      */
     private boolean hasAccess(HttpServletRequest req, String role) {
         if (role == null || role.isBlank()) return false;
@@ -92,9 +92,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         boolean isAdmin = "ADMIN".equalsIgnoreCase(role);
         boolean isOrganizer = "ORGANIZER".equalsIgnoreCase(role);
+        boolean isLogistica = "LOGISTICA".equalsIgnoreCase(role);
 
         if ("POST".equalsIgnoreCase(method) || "GET".equalsIgnoreCase(method)) {
-            return isAdmin || isOrganizer;
+            return isAdmin || isOrganizer || isLogistica;
         }
         return false;
     }
