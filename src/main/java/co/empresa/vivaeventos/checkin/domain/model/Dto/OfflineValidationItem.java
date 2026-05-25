@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -16,6 +17,8 @@ public class OfflineValidationItem {
 
     @NotNull(message = "validatedAt es obligatorio")
     private LocalDateTime validatedAt;
+
+    private UUID eventId;
 
     private String gateLocation;
 

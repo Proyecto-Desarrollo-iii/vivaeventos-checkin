@@ -4,5 +4,6 @@ public enum ValidationResult {
     SUCCESS,
     ALREADY_USED,
     REVOKED,
-    NOT_FOUND
+    NOT_FOUND,
+    WRONG_EVENT
 }

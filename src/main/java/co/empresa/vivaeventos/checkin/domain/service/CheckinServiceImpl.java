@@ -49,6 +49,7 @@ public class CheckinServiceImpl implements ICheckinService {
     public ValidationResponse validateTicket(ValidateTicketRequest request, String bearerToken, String correlationId) {
         return runValidation(
                 request.getQrCode(),
+                request.getEventId(),
                 request.getGateLocation(),
                 request.getValidatedBy(),
                 request.getDeviceId(),
@@ -70,6 +71,7 @@ public class CheckinServiceImpl implements ICheckinService {
         for (OfflineValidationItem item : items) {
             ValidationResponse vr = runValidation(
                     item.getQrCode(),
+                    item.getEventId(),
                     item.getGateLocation(),
                     item.getValidatedBy(),
                     item.getDeviceId(),
@@ -163,6 +165,7 @@ public class CheckinServiceImpl implements ICheckinService {
     }
 
     private ValidationResponse runValidation(String qrCode,
+                                             UUID requestEventId,
                                              String gateLocation,
                                              String validatedBy,
                                              String deviceId,
@@ -197,6 +200,12 @@ public class CheckinServiceImpl implements ICheckinService {
         IssuedTicketView ticket = opt.get();
         validation.setIssuedTicketId(ticket.id());
         validation.setEventId(ticket.eventId());
+
+        if (requestEventId != null && !requestEventId.equals(ticket.eventId())) {
+            validation.setResult(ValidationResult.WRONG_EVENT);
+            TicketValidation saved = validationRepository.save(validation);
+            return buildResponse(saved, ticket, "La boleta no pertenece a este evento");
+        }
 
         if (ticket.status() == TicketStatus.REVOKED) {
             validation.setResult(ValidationResult.REVOKED);
