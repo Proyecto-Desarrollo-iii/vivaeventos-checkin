@@ -50,9 +50,11 @@ public class CheckinController {
         response.put("autorizado", validation.result() == ValidationResult.SUCCESS);
         response.put("correlationId", correlationId);
 
-        HttpStatus status = validation.result() == ValidationResult.SUCCESS
-                ? HttpStatus.OK
-                : HttpStatus.CONFLICT;
+        HttpStatus status = switch (validation.result()) {
+            case SUCCESS -> HttpStatus.OK;
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            default -> HttpStatus.CONFLICT;
+        };
 
         return ResponseEntity.status(status).body(response);
     }
