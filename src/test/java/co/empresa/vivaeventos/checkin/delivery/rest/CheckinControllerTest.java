@@ -90,7 +90,7 @@ class CheckinControllerTest {
     }
 
     @Test
-    void validate_returnsConflictWhenNotFound() {
+    void validate_returnsNotFound_whenTicketNotFound() {
         ValidateTicketRequest req = new ValidateTicketRequest();
         req.setQrCode("QR-MISSING");
         ValidationResponse vr = sampleResponse(ValidationResult.NOT_FOUND, "QR no corresponde", false);
@@ -98,7 +98,7 @@ class CheckinControllerTest {
 
         ResponseEntity<Map<String, Object>> response = controller.validate(req, AUTH, reqWithCorrelation());
 
-        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertEquals(false, response.getBody().get("autorizado"));
     }
 
