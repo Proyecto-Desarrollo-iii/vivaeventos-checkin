@@ -12,8 +12,14 @@ import java.time.Duration;
 @Configuration
 public class TicketsRestClientConfig {
 
+    /**
+     * Se parte del RestClient.Builder auto-configurado por Spring Boot (que ya incluye
+     * el customizer de observación/tracing de Micrometer) para conservar la
+     * instrumentación y la propagación del contexto de traza hacia el servicio tickets.
+     */
     @Bean
     public RestClient ticketsRestClient(
+            RestClient.Builder restClientBuilder,
             @Value("${tickets.service.url}") String baseUrl,
             @Value("${tickets.service.connect-timeout-ms:3000}") long connectTimeoutMs,
             @Value("${tickets.service.read-timeout-ms:5000}") long readTimeoutMs) {
@@ -22,7 +28,7 @@ public class TicketsRestClientConfig {
                 .withConnectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .withReadTimeout(Duration.ofMillis(readTimeoutMs));
 
-        return RestClient.builder()
+        return restClientBuilder
                 .baseUrl(baseUrl)
                 .requestFactory(ClientHttpRequestFactories.get(settings))
                 .build();

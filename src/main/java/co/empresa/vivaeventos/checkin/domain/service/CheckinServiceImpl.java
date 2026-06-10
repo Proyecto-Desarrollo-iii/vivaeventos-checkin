@@ -11,6 +11,7 @@ import co.empresa.vivaeventos.checkin.domain.model.TicketStatus;
 import co.empresa.vivaeventos.checkin.domain.model.TicketValidation;
 import co.empresa.vivaeventos.checkin.domain.model.ValidationResult;
 import co.empresa.vivaeventos.checkin.domain.repository.ITicketValidationRepository;
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,7 @@ public class CheckinServiceImpl implements ICheckinService {
         this.degradedModeEnabled = degradedModeEnabled;
     }
 
+    @Observed(name = "checkin.validate_ticket", contextualName = "validateTicket")
     @Override
     @Transactional
     public ValidationResponse validateTicket(ValidateTicketRequest request, String bearerToken, String correlationId) {
