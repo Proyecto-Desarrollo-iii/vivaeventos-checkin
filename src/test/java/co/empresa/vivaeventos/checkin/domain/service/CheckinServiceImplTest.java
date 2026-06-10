@@ -273,6 +273,141 @@ class CheckinServiceImplTest {
     }
 
     @Test
+    void syncOffline_processesAllResultTypes() {
+        service = newService(true);
+        UUID commonEventId = UUID.randomUUID();
+        IssuedTicketView ticket = ticketViewWithEvent(commonEventId, TicketStatus.ISSUED);
+
+        OfflineValidationItem success = offlineItem("QR-SUCCESS", LocalDateTime.now().minusMinutes(4));
+        OfflineValidationItem used = offlineItem("QR-USED", LocalDateTime.now().minusMinutes(3));
+        OfflineValidationItem revoked = offlineItem("QR-REVOKED", LocalDateTime.now().minusMinutes(2));
+        OfflineValidationItem notFound = offlineItem("QR-NF", LocalDateTime.now().minusMinutes(1));
+
+        success.setEventId(commonEventId);
+        used.setEventId(commonEventId);
+        revoked.setEventId(commonEventId);
+        notFound.setEventId(commonEventId);
+
+        OfflineSyncRequest req = new OfflineSyncRequest();
+        req.setValidations(List.of(success, used, revoked, notFound));
+
+        when(ticketsClient.findByQrCode(eq("QR-SUCCESS"), eq(TOKEN))).thenReturn(Optional.of(ticket));
+        when(ticketsClient.findByQrCode(eq("QR-USED"), eq(TOKEN))).thenReturn(Optional.of(ticketViewWithEvent(commonEventId, TicketStatus.USED)));
+        when(ticketsClient.findByQrCode(eq("QR-REVOKED"), eq(TOKEN))).thenReturn(Optional.of(ticketViewWithEvent(commonEventId, TicketStatus.REVOKED)));
+        when(ticketsClient.findByQrCode(eq("QR-NF"), eq(TOKEN))).thenReturn(Optional.empty());
+
+        when(validationRepository.existsByQrCodeAndResult(anyString(), eq(ValidationResult.SUCCESS))).thenReturn(false);
+        when(validationRepository.save(any(TicketValidation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OfflineSyncResponse response = service.syncOfflineValidations(req, TOKEN, CID);
+
+        assertEquals(4, response.total());
+        assertEquals(1, response.success());
+        assertEquals(1, response.alreadyUsed());
+        assertEquals(1, response.revoked());
+        assertEquals(1, response.notFound());
+    }
+
+    @Test
+    void getValidationsByEvent_returnsEmpty_whenNotFound() {
+        service = newService(true);
+        UUID eventId = UUID.randomUUID();
+        when(validationRepository.findByEventIdOrderByValidatedAtDesc(eventId)).thenReturn(List.of());
+
+        List<ValidationResponse> result = service.getValidationsByEvent(eventId);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getEventStats_returnsNullLastValidation_whenNoRecords() {
+        service = newService(true);
+        UUID eventId = UUID.randomUUID();
+        when(validationRepository.countByEventIdAndResult(eventId, ValidationResult.SUCCESS)).thenReturn(0L);
+        when(validationRepository.countByEventIdAndResult(eventId, ValidationResult.ALREADY_USED)).thenReturn(0L);
+        when(validationRepository.countByEventIdAndResult(eventId, ValidationResult.REVOKED)).thenReturn(0L);
+        when(validationRepository.countByEventIdAndResult(eventId, ValidationResult.NOT_FOUND)).thenReturn(0L);
+        when(validationRepository.countByEventIdAndPendingMarkUsedTrue(eventId)).thenReturn(0L);
+        when(validationRepository.sumByGateForSuccess(eventId)).thenReturn(List.of());
+        when(validationRepository.findByEventIdOrderByValidatedAtDesc(eventId)).thenReturn(List.of());
+
+        EventStatsResponse stats = service.getEventStats(eventId);
+
+        assertEquals(0L, stats.totalValidaciones());
+        assertNull(stats.ultimaValidacionEn());
+    }
+
+    @Test
+    void validate_returnsWrongEvent_whenEventMismatch() {
+        service = newService(true);
+        UUID eventId = UUID.randomUUID();
+        UUID otherEventId = UUID.randomUUID();
+        ValidateTicketRequest req = buildRequest("QR-WRONG-EVENT");
+        req.setEventId(otherEventId);
+        IssuedTicketView ticket = ticketView(TicketStatus.ISSUED);
+        when(ticketsClient.findByQrCode("QR-WRONG-EVENT", TOKEN)).thenReturn(Optional.of(ticket));
+        when(validationRepository.save(any(TicketValidation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ValidationResponse response = service.validateTicket(req, TOKEN, CID);
+
+        assertEquals(ValidationResult.WRONG_EVENT, response.result());
+        verify(ticketsClient, never()).markAsUsed(any(), anyString());
+    }
+
+    @Test
+    void getValidationsByTicket_returnsList_whenFound() {
+        service = newService(true);
+        UUID ticketId = UUID.randomUUID();
+        TicketValidation v = new TicketValidation();
+        v.setId(UUID.randomUUID());
+        v.setQrCode("QR-TEST");
+        v.setResult(ValidationResult.SUCCESS);
+        v.setValidatedAt(LocalDateTime.now());
+        v.setCorrelationId(CID);
+        when(validationRepository.findByIssuedTicketIdOrderByValidatedAtDesc(ticketId)).thenReturn(List.of(v));
+
+        List<ValidationResponse> result = service.getValidationsByTicket(ticketId);
+
+        assertEquals(1, result.size());
+        assertEquals(ValidationResult.SUCCESS, result.get(0).result());
+        assertEquals(CID, result.get(0).correlationId());
+    }
+
+    @Test
+    void getValidationsByEvent_returnsList() {
+        service = newService(true);
+        UUID eventId = UUID.randomUUID();
+        TicketValidation v = new TicketValidation();
+        v.setId(UUID.randomUUID());
+        v.setQrCode("QR-TEST");
+        v.setResult(ValidationResult.SUCCESS);
+        v.setValidatedAt(LocalDateTime.now());
+        v.setCorrelationId(CID);
+        when(validationRepository.findByEventIdOrderByValidatedAtDesc(eventId)).thenReturn(List.of(v));
+
+        List<ValidationResponse> result = service.getValidationsByEvent(eventId);
+
+        assertEquals(1, result.size());
+        assertEquals(ValidationResult.SUCCESS, result.get(0).result());
+    }
+
+    @Test
+    void retryPendingMarkUsed_skipsWhenIssuedTicketIdNull() {
+        service = newService(true);
+        TicketValidation v = new TicketValidation();
+        v.setId(UUID.randomUUID());
+        v.setIssuedTicketId(null);
+        v.setPendingMarkUsed(true);
+        when(validationRepository.findTop50ByPendingMarkUsedTrueOrderByValidatedAtAsc()).thenReturn(List.of(v));
+
+        int reconciled = service.retryPendingMarkUsed(TOKEN);
+
+        assertEquals(0, reconciled);
+        verify(ticketsClient, never()).markAsUsed(any(), anyString());
+    }
+
+    @Test
     void retryPendingMarkUsed_keepsFlagWhenStillFailing() {
         service = newService(true);
         TicketValidation v = new TicketValidation();
@@ -318,6 +453,27 @@ class CheckinServiceImplTest {
                 id,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                "Festival Demo",
+                UUID.randomUUID(),
+                "VIP",
+                "Ana",
+                "ana@example.com",
+                "CC123",
+                new BigDecimal("100000"),
+                "QR-X",
+                status,
+                LocalDateTime.now(),
+                status == TicketStatus.USED ? LocalDateTime.now() : null,
+                status == TicketStatus.REVOKED ? LocalDateTime.now() : null,
+                status == TicketStatus.REVOKED ? "test" : null
+        );
+    }
+
+    private IssuedTicketView ticketViewWithEvent(UUID eventId, TicketStatus status) {
+        return new IssuedTicketView(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                eventId,
                 "Festival Demo",
                 UUID.randomUUID(),
                 "VIP",

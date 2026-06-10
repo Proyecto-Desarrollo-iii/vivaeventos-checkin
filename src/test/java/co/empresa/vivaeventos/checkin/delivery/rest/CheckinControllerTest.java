@@ -77,6 +77,45 @@ class CheckinControllerTest {
     }
 
     @Test
+    void validate_returnsConflictWhenRevoked() {
+        ValidateTicketRequest req = new ValidateTicketRequest();
+        req.setQrCode("QR-REV");
+        ValidationResponse vr = sampleResponse(ValidationResult.REVOKED, "La boleta fue revocada", false);
+        when(checkinService.validateTicket(any(ValidateTicketRequest.class), eq(AUTH), eq(CID))).thenReturn(vr);
+
+        ResponseEntity<Map<String, Object>> response = controller.validate(req, AUTH, reqWithCorrelation());
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(false, response.getBody().get("autorizado"));
+    }
+
+    @Test
+    void validate_returnsConflictWhenNotFound() {
+        ValidateTicketRequest req = new ValidateTicketRequest();
+        req.setQrCode("QR-MISSING");
+        ValidationResponse vr = sampleResponse(ValidationResult.NOT_FOUND, "QR no corresponde", false);
+        when(checkinService.validateTicket(any(ValidateTicketRequest.class), eq(AUTH), eq(CID))).thenReturn(vr);
+
+        ResponseEntity<Map<String, Object>> response = controller.validate(req, AUTH, reqWithCorrelation());
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(false, response.getBody().get("autorizado"));
+    }
+
+    @Test
+    void validate_returnsConflictWhenWrongEvent() {
+        ValidateTicketRequest req = new ValidateTicketRequest();
+        req.setQrCode("QR-WE");
+        ValidationResponse vr = sampleResponse(ValidationResult.WRONG_EVENT, "No pertenece a este evento", false);
+        when(checkinService.validateTicket(any(ValidateTicketRequest.class), eq(AUTH), eq(CID))).thenReturn(vr);
+
+        ResponseEntity<Map<String, Object>> response = controller.validate(req, AUTH, reqWithCorrelation());
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(false, response.getBody().get("autorizado"));
+    }
+
+    @Test
     void sync_returnsOkWithSummary() {
         OfflineValidationItem item = new OfflineValidationItem();
         item.setQrCode("QR-OFFLINE");

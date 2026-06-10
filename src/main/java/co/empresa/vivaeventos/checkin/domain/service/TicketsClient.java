@@ -8,6 +8,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -45,8 +46,13 @@ public class TicketsClient implements ITicketsClient {
                     })
                     .body(TicketEnvelope.class);
             return envelope != null ? Optional.ofNullable(envelope.boleta()) : Optional.empty();
-        } catch (TicketNotFoundRemote | HttpClientErrorException.NotFound e) {
+        } catch (TicketNotFoundRemote e) {
             return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                return Optional.empty();
+            }
+            throw e;
         } catch (ResourceAccessException e) {
             throw new TicketsClientException("Tickets no disponible: " + e.getMessage());
         }
@@ -72,7 +78,7 @@ public class TicketsClient implements ITicketsClient {
     }
 
     @SuppressWarnings("unused")
-    private Optional<IssuedTicketView> findByQrCodeFallback(String qrCode, String bearerToken, Throwable t) {
+    Optional<IssuedTicketView> findByQrCodeFallback(String qrCode, String bearerToken, Throwable t) {
         if (t instanceof CallNotPermittedException) {
             throw new TicketsUnavailableException("Circuit breaker abierto: tickets no disponible", t);
         }
@@ -83,7 +89,7 @@ public class TicketsClient implements ITicketsClient {
     }
 
     @SuppressWarnings("unused")
-    private IssuedTicketView markAsUsedFallback(UUID ticketId, String bearerToken, Throwable t) {
+    IssuedTicketView markAsUsedFallback(UUID ticketId, String bearerToken, Throwable t) {
         if (t instanceof CallNotPermittedException) {
             throw new TicketsUnavailableException("Circuit breaker abierto: tickets no disponible", t);
         }
@@ -105,9 +111,9 @@ public class TicketsClient implements ITicketsClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record TicketEnvelope(IssuedTicketView boleta) {}
+    static record TicketEnvelope(IssuedTicketView boleta) {}
 
-    private static final class TicketNotFoundRemote extends RuntimeException {
+    static final class TicketNotFoundRemote extends RuntimeException {
         TicketNotFoundRemote() { super("Boleta no encontrada"); }
     }
 }
