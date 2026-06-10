@@ -11,7 +11,8 @@ class TicketsRestClientConfigTest {
 
     @Test
     void ticketsRestClient_createsBean() {
-        RestClient client = config.ticketsRestClient("http://localhost:8080", 3000, 5000);
+        RestClient.Builder builder = RestClient.builder();
+        RestClient client = config.ticketsRestClient(builder, "http://localhost:8080", 3000, 5000);
 
         assertNotNull(client);
     }
